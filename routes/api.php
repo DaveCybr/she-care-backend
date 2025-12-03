@@ -1,67 +1,75 @@
 <?php
+
 /**
  * API Router
  * Simple router for handling API requests
  */
 
-class Router {
+class Router
+{
     private $routes = [];
-    
-    public function get($path, $handler) {
+
+    public function get($path, $handler)
+    {
         $this->addRoute('GET', $path, $handler);
     }
-    
-    public function post($path, $handler) {
+
+    public function post($path, $handler)
+    {
         $this->addRoute('POST', $path, $handler);
     }
-    
-    public function put($path, $handler) {
+
+    public function put($path, $handler)
+    {
         $this->addRoute('PUT', $path, $handler);
     }
-    
-    public function delete($path, $handler) {
+
+    public function delete($path, $handler)
+    {
         $this->addRoute('DELETE', $path, $handler);
     }
-    
-    private function addRoute($method, $path, $handler) {
+
+    private function addRoute($method, $path, $handler)
+    {
         $this->routes[] = [
             'method' => $method,
             'path' => $path,
             'handler' => $handler
         ];
     }
-    
-    public function dispatch($requestMethod, $requestUri) {
+
+    public function dispatch($requestMethod, $requestUri)
+    {
         // Remove query string
         $uri = parse_url($requestUri, PHP_URL_PATH);
-        
+
         // Remove /api prefix if exists
         $uri = preg_replace('#^/api#', '', $uri);
-        
+
         foreach ($this->routes as $route) {
             if ($route['method'] !== $requestMethod) {
                 continue;
             }
-            
+
             // Convert route path to regex pattern
             $pattern = preg_replace('/\{([^}]+)\}/', '([^/]+)', $route['path']);
             $pattern = '#^' . $pattern . '$#';
-            
+
             if (preg_match($pattern, $uri, $matches)) {
                 array_shift($matches); // Remove full match
-                
+
                 // Call handler
                 $handler = $route['handler'];
                 list($controller, $method) = explode('@', $handler);
-                
+
                 require_once __DIR__ . '/../controllers/' . $controller . '.php';
-                
+
                 $controllerInstance = new $controller();
                 call_user_func_array([$controllerInstance, $method], $matches);
                 return;
             }
         }
-        
+
         // 404 Not Found
         http_response_code(404);
         header('Content-Type: application/json');
@@ -113,14 +121,14 @@ $router->delete('/admin/diseases/{id}', 'AdminController@deleteDisease');
 
 // ==================== ARTICLES & MAPS ====================
 $router->get('/articles', 'ArticleController@getArticles');
-$router->get('/maps/clinics', 'MapsController@getClinics');
+$router->get('/maps/clinics', 'ArticleController@getClinics');
 
 // ==================== STATISTICS ====================
 $router->get('/statistics/diseases', 'StatisticsController@getDiseaseStatistics');
 $router->get('/statistics/summary', 'StatisticsController@getSummary');
 
 // Health check
-$router->get('/health', function() {
+$router->get('/health', function () {
     header('Content-Type: application/json');
     echo json_encode([
         'success' => true,
@@ -131,4 +139,3 @@ $router->get('/health', function() {
 });
 
 return $router;
-?>

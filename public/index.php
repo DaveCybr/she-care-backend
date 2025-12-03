@@ -1,4 +1,5 @@
 <?php
+
 /**
  * SheCare API - Entry Point
  * 
@@ -34,7 +35,7 @@ try {
     $router->dispatch($requestMethod, $requestUri);
 } catch (Exception $e) {
     error_log('Application error: ' . $e->getMessage());
-    
+
     http_response_code(500);
     header('Content-Type: application/json');
     echo json_encode([
@@ -43,4 +44,3 @@ try {
         'error' => $e->getMessage()
     ]);
 }
-?>

@@ -1,7 +1,4 @@
--- SheCare Database Schema (PHP Version)
-DROP DATABASE IF EXISTS shecare_db;
-CREATE DATABASE shecare_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE shecare_db;
+
 
 -- Users table
 CREATE TABLE users (

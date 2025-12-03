@@ -4,30 +4,34 @@ require_once __DIR__ . '/../config/database.php';
 /**
  * Questionnaire Model
  */
-class Questionnaire {
+class Questionnaire
+{
     private $db;
-    
-    public function __construct() {
+
+    public function __construct()
+    {
         $this->db = Database::getInstance()->getConnection();
     }
-    
+
     /**
      * Create submission
      */
-    public function createSubmission($userId) {
+    public function createSubmission($userId)
+    {
         $sql = "INSERT INTO questionnaire_submissions (user_id, completed) VALUES (?, FALSE)";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId]);
         return $this->db->lastInsertId();
     }
-    
+
     /**
      * Save answers
      */
-    public function saveAnswers($submissionId, $answers) {
+    public function saveAnswers($submissionId, $answers)
+    {
         $sql = "INSERT INTO questionnaire_answers (submission_id, question_id, answer_value) VALUES (?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        
+
         foreach ($answers as $answer) {
             $stmt->execute([
                 $submissionId,
@@ -35,18 +39,19 @@ class Questionnaire {
                 $answer['answer_value']
             ]);
         }
-        
+
         return true;
     }
-    
+
     /**
      * Save diagnosis result
      */
-    public function saveDiagnosis($submissionId, $diagnosis) {
+    public function saveDiagnosis($submissionId, $diagnosis)
+    {
         $sql = "INSERT INTO diagnosis_results 
                 (submission_id, disease_id, confidence_score, diagnosis_text, recommendations) 
                 VALUES (?, ?, ?, ?, ?)";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             $submissionId,
@@ -55,26 +60,28 @@ class Questionnaire {
             $diagnosis['diagnosis_text'] ?? '',
             $diagnosis['recommendations'] ?? ''
         ]);
-        
+
         return $this->db->lastInsertId();
     }
-    
+
     /**
      * Mark submission as completed
      */
-    public function completeSubmission($submissionId) {
+    public function completeSubmission($submissionId)
+    {
         $sql = "UPDATE questionnaire_submissions SET completed = TRUE WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$submissionId]);
     }
-    
+
     /**
-     * Get result by submission ID
+     * Get result by submission ID (for regular user)
      */
-    public function getResult($submissionId, $userId, $lang = 'id') {
+    public function getResult($submissionId, $userId, $lang = 'id')
+    {
         $nameField = $lang === 'en' ? 'name_en' : 'name_id';
         $descField = $lang === 'en' ? 'description_en' : 'description_id';
-        
+
         $sql = "SELECT 
                     dr.id,
                     dr.submission_id,
@@ -86,24 +93,59 @@ class Questionnaire {
                     d.{$descField} as disease_description,
                     d.severity,
                     qs.submission_date,
+                    u.id as user_id,
                     u.name as user_name
                 FROM diagnosis_results dr
                 LEFT JOIN diseases d ON dr.disease_id = d.id
                 INNER JOIN questionnaire_submissions qs ON dr.submission_id = qs.id
                 INNER JOIN users u ON qs.user_id = u.id
                 WHERE dr.submission_id = ? AND qs.user_id = ?";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$submissionId, $userId]);
         return $stmt->fetch();
     }
-    
+
+    /**
+     * Get result by submission ID (for admin - no user filter)
+     */
+    public function getResultForAdmin($submissionId, $lang = 'id')
+    {
+        $nameField = $lang === 'en' ? 'name_en' : 'name_id';
+        $descField = $lang === 'en' ? 'description_en' : 'description_id';
+
+        $sql = "SELECT 
+                    dr.id,
+                    dr.submission_id,
+                    dr.confidence_score,
+                    dr.diagnosis_text,
+                    dr.recommendations,
+                    dr.created_at,
+                    d.{$nameField} as disease_name,
+                    d.{$descField} as disease_description,
+                    d.severity,
+                    qs.submission_date,
+                    u.id as user_id,
+                    u.name as user_name,
+                    u.email as user_email
+                FROM diagnosis_results dr
+                LEFT JOIN diseases d ON dr.disease_id = d.id
+                INNER JOIN questionnaire_submissions qs ON dr.submission_id = qs.id
+                INNER JOIN users u ON qs.user_id = u.id
+                WHERE dr.submission_id = ?";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$submissionId]);
+        return $stmt->fetch();
+    }
+
     /**
      * Get answers by submission ID
      */
-    public function getAnswers($submissionId, $lang = 'id') {
+    public function getAnswers($submissionId, $lang = 'id')
+    {
         $textField = $lang === 'en' ? 'question_text_en' : 'question_text_id';
-        
+
         $sql = "SELECT 
                     qa.question_id,
                     qa.answer_value,
@@ -112,18 +154,19 @@ class Questionnaire {
                 INNER JOIN questions q ON qa.question_id = q.id
                 WHERE qa.submission_id = ?
                 ORDER BY q.order_number";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$submissionId]);
         return $stmt->fetchAll();
     }
-    
+
     /**
      * Get user history
      */
-    public function getUserHistory($userId, $limit = 10, $offset = 0, $lang = 'id') {
+    public function getUserHistory($userId, $limit = 10, $offset = 0, $lang = 'id')
+    {
         $nameField = $lang === 'en' ? 'name_en' : 'name_id';
-        
+
         $sql = "SELECT 
                     qs.id as submission_id,
                     qs.submission_date,
@@ -138,29 +181,31 @@ class Questionnaire {
                 WHERE qs.user_id = ?
                 ORDER BY qs.submission_date DESC
                 LIMIT ? OFFSET ?";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId, $limit, $offset]);
         return $stmt->fetchAll();
     }
-    
+
     /**
      * Get total user submissions count
      */
-    public function getUserSubmissionsCount($userId) {
+    public function getUserSubmissionsCount($userId)
+    {
         $sql = "SELECT COUNT(*) as total FROM questionnaire_submissions WHERE user_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId]);
         $result = $stmt->fetch();
         return $result['total'];
     }
-    
+
     /**
      * Get all history (admin)
      */
-    public function getAllHistory($limit = 20, $offset = 0, $lang = 'id') {
+    public function getAllHistory($limit = 20, $offset = 0, $lang = 'id')
+    {
         $nameField = $lang === 'en' ? 'name_en' : 'name_id';
-        
+
         $sql = "SELECT 
                     qs.id as submission_id,
                     qs.submission_date,
@@ -177,20 +222,101 @@ class Questionnaire {
                 LEFT JOIN diseases d ON dr.disease_id = d.id
                 ORDER BY qs.submission_date DESC
                 LIMIT ? OFFSET ?";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$limit, $offset]);
         return $stmt->fetchAll();
     }
-    
+
     /**
      * Get total submissions count
      */
-    public function getTotalCount() {
+    public function getTotalCount()
+    {
         $sql = "SELECT COUNT(*) as total FROM questionnaire_submissions";
         $stmt = $this->db->query($sql);
         $result = $stmt->fetch();
         return $result['total'];
     }
+
+    /**
+     * Get diseases by submission
+     */
+    public function getDiseasesBySubmission($submissionId, $lang = 'id')
+    {
+        $nameField = $lang === 'en' ? 'name_en' : 'name_id';
+        $descField = $lang === 'en' ? 'description_en' : 'description_id';
+        $recoField = $lang === 'en' ? 'recommendations_en' : 'recommendations_id';
+
+        $sql = "SELECT 
+                d.id,
+                d.{$nameField} as name,
+                d.{$descField} as description,
+                d.{$recoField} as recommendations,
+                d.severity,
+                dr.confidence_score as probability
+            FROM diagnosis_results dr
+            INNER JOIN diseases d ON dr.disease_id = d.id
+            WHERE dr.submission_id = ?
+            ORDER BY dr.confidence_score DESC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$submissionId]);
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Get statistics (for admin dashboard)
+     */
+    public function getStatistics($lang = 'id')
+    {
+        $nameField = $lang === 'en' ? 'name_en' : 'name_id';
+
+        // Total submissions
+        $totalSql = "SELECT COUNT(*) as total FROM questionnaire_submissions";
+        $totalStmt = $this->db->query($totalSql);
+        $total = $totalStmt->fetch()['total'];
+
+        // Completed submissions
+        $completedSql = "SELECT COUNT(*) as completed FROM questionnaire_submissions WHERE completed = TRUE";
+        $completedStmt = $this->db->query($completedSql);
+        $completed = $completedStmt->fetch()['completed'];
+
+        // Total users who submitted
+        $usersSql = "SELECT COUNT(DISTINCT user_id) as total_users FROM questionnaire_submissions";
+        $usersStmt = $this->db->query($usersSql);
+        $totalUsers = $usersStmt->fetch()['total_users'];
+
+        // Most common diseases
+        $diseasesSql = "SELECT 
+                            d.{$nameField} as disease_name,
+                            d.severity,
+                            COUNT(*) as count
+                        FROM diagnosis_results dr
+                        INNER JOIN diseases d ON dr.disease_id = d.id
+                        GROUP BY dr.disease_id
+                        ORDER BY count DESC
+                        LIMIT 5";
+        $diseasesStmt = $this->db->query($diseasesSql);
+        $topDiseases = $diseasesStmt->fetchAll();
+
+        // Recent submissions
+        $recentSql = "SELECT 
+                        DATE(submission_date) as date,
+                        COUNT(*) as count
+                    FROM questionnaire_submissions
+                    WHERE submission_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY DATE(submission_date)
+                    ORDER BY date DESC";
+        $recentStmt = $this->db->query($recentSql);
+        $recentActivity = $recentStmt->fetchAll();
+
+        return [
+            'total_submissions' => $total,
+            'completed_submissions' => $completed,
+            'total_users' => $totalUsers,
+            'top_diseases' => $topDiseases,
+            'recent_activity' => $recentActivity
+        ];
+    }
 }
-?>
